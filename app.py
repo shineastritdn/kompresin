@@ -213,5 +213,48 @@ def download_file(filename):
 def manual_book():
     return render_template('manual_book.html')
 
+@app.route('/compress', methods=['POST'])
+def compress_api():
+    temp_file_path = None
+    compressed_path = None
+    try:
+        if 'file' not in request.files:
+            return 'Tidak ada file yang diunggah', 400
+        file = request.files['file']
+        if file.filename == '':
+            return 'Tidak ada file yang dipilih', 400
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            temp_file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(temp_file_path)
+            try:
+                file_type = magic.from_file(temp_file_path, mime=True)
+                compressed_data = compress_file(temp_file_path, file_type)
+                # Nama file hasil kompresi
+                if file_type.startswith('image/'):
+                    out_filename = f"compressed_{os.path.splitext(filename)[0]}.jpg"
+                    mimetype = 'image/jpeg'
+                else:
+                    out_filename = f"compressed_{filename}.zip"
+                    mimetype = 'application/zip'
+                # Hapus file asli
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+                return send_file(
+                    io.BytesIO(compressed_data),
+                    as_attachment=True,
+                    download_name=out_filename,
+                    mimetype=mimetype
+                )
+            except Exception as e:
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+                return f'Error saat kompresi: {str(e)}', 500
+        return 'Tipe file tidak didukung', 400
+    except Exception as e:
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        return 'Terjadi kesalahan server', 500
+
 if __name__ == '__main__':
     app.run(debug=True) 
